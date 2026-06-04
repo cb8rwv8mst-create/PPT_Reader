@@ -11,6 +11,7 @@ import org.springframework.web.client.RestClient;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 
 @Service
 public class DeepSeekService {
@@ -23,8 +24,13 @@ public class DeepSeekService {
             @Value("${DEEPSEEK_BASE_URL:https://api.deepseek.com}") String baseUrl
     ) {
         this.apiKey = apiKey;
+
+        String safeBaseUrl = (baseUrl == null || baseUrl.isBlank())
+                ? "https://api.deepseek.com"
+                : baseUrl;
+
         this.restClient = RestClient.builder()
-                .baseUrl(baseUrl)
+                .baseUrl(safeBaseUrl)
                 .defaultHeader(HttpHeaders.CONTENT_TYPE, "application/json")
                 .build();
     }
@@ -54,7 +60,7 @@ public class DeepSeekService {
         DeepSeekResponse response = restClient.post()
                 .uri("/chat/completions")
                 .header(HttpHeaders.AUTHORIZATION, "Bearer " + apiKey)
-                .body(requestBody)
+                .body(Objects.requireNonNull(requestBody))
                 .retrieve()
                 .body(DeepSeekResponse.class);
 
@@ -66,29 +72,25 @@ public class DeepSeekService {
 
     private String buildPrompt(List<SlideDto> slides) {
         StringBuilder sb = new StringBuilder();
-
-        sb.append("""
-                请根据下面的 PPT 幻灯片内容，生成一份自然流畅的中文讲解稿。
-
-                要求：
-                1. 按页生成讲解内容。
-                2. 每一页必须用 [SLIDE_0]、[SLIDE_1] 这样的标记开头。
-                3. 语言适合课堂讲解，要自然、清楚、有逻辑。
-                4. 不要编造与幻灯片无关的内容。
-                5. 每页讲解控制在一小段。
-
-                PPT 内容如下：
-                """);
-
+    
+        sb.append("请根据下面的 PPT 幻灯片内容，生成一份自然流畅的中文讲解稿。\n\n");
+        sb.append("要求：\n");
+        sb.append("1. 按页生成讲解内容。\n");
+        sb.append("2. 每一页必须用 [SLIDE_0]、[SLIDE_1] 这样的标记开头。\n");
+        sb.append("3. 语言适合课堂讲解，要自然、清楚、有逻辑。\n");
+        sb.append("4. 不要编造与幻灯片无关的内容。\n");
+        sb.append("5. 每页讲解控制在一小段。\n\n");
+        sb.append("PPT 内容如下：\n");
+    
         for (int i = 0; i < slides.size(); i++) {
             SlideDto slide = slides.get(i);
-
+    
             sb.append("\n[PAGE_").append(i).append("]\n");
             sb.append("标题：").append(nullToEmpty(slide.title())).append("\n");
             sb.append("正文：").append(nullToEmpty(slide.content())).append("\n");
             sb.append("备注：").append(nullToEmpty(slide.notes())).append("\n");
         }
-
+    
         return sb.toString();
     }
 
