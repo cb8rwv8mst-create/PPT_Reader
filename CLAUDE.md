@@ -63,11 +63,35 @@ POST /api/ppt/{id}/narrate    → { fullScript, slideScripts: [...] }
 GET  /api/ppt/{id}/audio      → audio/mpeg 二进制
 ```
 
-## 关键配置
+## 配置管理
 
-- DeepSeek API Key：通过环境变量 `DEEPSEEK_API_KEY` 注入，不在代码中硬编码
+**所有配置通过 `.env` 文件管理，不在代码中硬编码密钥或敏感信息。**
+
+### 使用方式
+
+1. 复制模板文件：`cp .env.example .env`
+2. 编辑 `.env`，填入实际的 API Key 等配置
+3. Spring Boot 启动时自动读取 `.env`（通过 `spring-boot-starter-dotenv` 或 IDEA 的 EnvFile 插件）
+
+### .env 变量清单
+
+| 变量名 | 说明 | 示例 |
+|---|---|---|
+| `DEEPSEEK_API_KEY` | DeepSeek API 密钥 | `sk-xxxx` |
+| `DEEPSEEK_BASE_URL` | DeepSeek API 地址（可选） | `https://api.deepseek.com` |
+| `UPLOAD_DIR` | PPT 文件上传目录（可选） | `./uploads` |
+| `AUDIO_DIR` | 生成的 MP3 存放目录（可选） | `./audio` |
+
+### 安全约定
+
+- `.env` **已加入 `.gitignore`**，不会被提交到 Git
+- `.env.example` 提供模板（不含真实密钥），可安全提交
+- 新成员加入时，从 `.env.example` 复制并填入自己的密钥
+
+### 其他配置
+
 - CORS：后端需允许 `http://localhost:5173` 跨域
-- 上传文件：保存在本地临时目录，任务 ID 用 UUID
+- 任务 ID：使用 UUID 生成
 
 ## 编码约定
 
