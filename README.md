@@ -14,10 +14,11 @@
 | 层 | 技术 |
 |---|---|
 | 前端 | React 18 + Vite + TypeScript |
-| 后端 | Spring Boot 3.5 + Java 17 |
+| 后端 | Spring Boot 3.3 + Java 17 |
 | PPT 解析 | Apache POI (XSLF) |
 | AI 文本生成 | DeepSeek API (`deepseek-chat`) |
 | 语音合成 | Microsoft Edge TTS |
+| API 文档 | Knife4j (OpenAPI 3) |
 | 构建工具 | Maven (后端) + npm (前端) |
 
 ## 系统架构
@@ -71,6 +72,10 @@ npm run dev
 ```
 
 前端开发服务器默认运行在 `http://localhost:5173`。
+
+### Knife4j 接口文档
+
+启动后端后，访问 `http://localhost:8080/doc.html` 即可在浏览器中查看和调试所有 API（支持在线传参、文件上传等）。
 
 ## API 文档
 
