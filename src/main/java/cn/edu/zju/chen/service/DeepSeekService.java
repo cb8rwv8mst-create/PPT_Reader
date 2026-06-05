@@ -1,7 +1,7 @@
 package cn.edu.zju.chen.service;
 
-import cn.edu.zju.chen.dto.NarrateResponse;
-import cn.edu.zju.chen.dto.SlideDto;
+import cn.edu.zju.chen.model.Narration;
+import cn.edu.zju.chen.model.Slide;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpHeaders;
@@ -35,7 +35,7 @@ public class DeepSeekService {
                 .build();
     }
 
-    public NarrateResponse generateNarration(List<SlideDto> slides) {
+    public Narration generateNarration(List<Slide> slides) {
         if (apiKey == null || apiKey.isBlank()) {
             throw new IllegalStateException("DEEPSEEK_API_KEY is not configured.");
         }
@@ -67,12 +67,15 @@ public class DeepSeekService {
         String fullScript = extractContent(response);
         List<String> slideScripts = splitBySlide(fullScript, slides.size());
 
-        return new NarrateResponse(fullScript, slideScripts);
+        Narration narration = new Narration();
+        narration.setFullScript(fullScript);
+        narration.setSlideScripts(slideScripts);
+        return narration;
     }
 
-    private String buildPrompt(List<SlideDto> slides) {
+    private String buildPrompt(List<Slide> slides) {
         StringBuilder sb = new StringBuilder();
-    
+
         sb.append("请根据下面的 PPT 幻灯片内容，生成一份自然流畅的中文讲解稿。\n\n");
         sb.append("要求：\n");
         sb.append("1. 按页生成讲解内容。\n");
@@ -81,16 +84,16 @@ public class DeepSeekService {
         sb.append("4. 不要编造与幻灯片无关的内容。\n");
         sb.append("5. 每页讲解控制在一小段。\n\n");
         sb.append("PPT 内容如下：\n");
-    
+
         for (int i = 0; i < slides.size(); i++) {
-            SlideDto slide = slides.get(i);
-    
+            Slide slide = slides.get(i);
+
             sb.append("\n[PAGE_").append(i).append("]\n");
-            sb.append("标题：").append(nullToEmpty(slide.title())).append("\n");
-            sb.append("正文：").append(nullToEmpty(slide.content())).append("\n");
-            sb.append("备注：").append(nullToEmpty(slide.notes())).append("\n");
+            sb.append("标题：").append(nullToEmpty(slide.getTitle())).append("\n");
+            sb.append("正文：").append(nullToEmpty(slide.getContent())).append("\n");
+            sb.append("备注：").append(nullToEmpty(slide.getNotes())).append("\n");
         }
-    
+
         return sb.toString();
     }
 

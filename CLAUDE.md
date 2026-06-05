@@ -106,3 +106,4 @@ GET  /api/ppt/{id}/audio      → audio/mpeg 二进制
 ## 当前状态
 
 成员 A 的工作已完成：PPT 解析（Apache POI）、REST API（上传+查询）、Knife4j 接口文档（`/doc.html`）。成员 B 和 C 可开始开发。前端尚未创建。
+****
