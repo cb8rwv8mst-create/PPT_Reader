@@ -43,7 +43,7 @@ public class DeepSeekService {
         String prompt = buildPrompt(slides);
 
         Map<String, Object> requestBody = Map.of(
-                "model", "deepseek-chat",
+                "model", "deepseek-v4-flash",
                 "messages", List.of(
                         Map.of(
                                 "role", "system",
