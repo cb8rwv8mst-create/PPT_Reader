@@ -51,17 +51,23 @@ public class NarrationController {
     }
 
     @Operation(summary = "获取讲解语音", description = "获取已合成的 MP3 音频文件")
-    @GetMapping(value = "/{id}/audio", produces = "audio/mpeg")
-    public ResponseEntity<Resource> getAudio(
+    @GetMapping("/{id}/audio")
+    public ResponseEntity<?> getAudio(
             @Parameter(description = "任务 ID") @PathVariable String id) {
-        Resource audioResource = edgeTtsService.getAudioResource(id);
-        return ResponseEntity.ok()
-                .contentType(MediaType.parseMediaType("audio/mpeg"))
-                .header(HttpHeaders.CONTENT_DISPOSITION,
-                        ContentDisposition.inline()
-                                .filename(id + ".mp3")
-                                .build()
-                                .toString())
-                .body(audioResource);
+        try {
+            Resource audioResource = edgeTtsService.getAudioResource(id);
+            return ResponseEntity.ok()
+                    .contentType(MediaType.parseMediaType("audio/mpeg"))
+                    .header(HttpHeaders.CONTENT_DISPOSITION,
+                            ContentDisposition.inline()
+                                    .filename(id + ".mp3")
+                                    .build()
+                                    .toString())
+                    .body(audioResource);
+        } catch (IllegalStateException e) {
+            return ResponseEntity.status(404)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .body(ApiResponse.error(404, e.getMessage()));
+        }
     }
 }
