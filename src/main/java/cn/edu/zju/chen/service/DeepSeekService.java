@@ -64,13 +64,26 @@ public class DeepSeekService {
                 .retrieve()
                 .body(DeepSeekResponse.class);
 
-        String fullScript = extractContent(response);
-        List<String> slideScripts = splitBySlide(fullScript, slides.size());
+        String rawScript = extractContent(response);
+        List<String> slideScripts = splitBySlide(rawScript, slides.size());
+
+        // 拼接干净的讲解稿（去除标记符号），用于 TTS 播报和前端展示
+        String cleanScript = String.join("\n\n", slideScripts);
 
         Narration narration = new Narration();
-        narration.setFullScript(fullScript);
+        narration.setFullScript(cleanScript);
         narration.setSlideScripts(slideScripts);
         return narration;
+    }
+
+    /**
+     * 去除 [SLIDE_X] [PAGE_X] 等标记符号。
+     */
+    private String stripMarkers(String text) {
+        return text.replaceAll("\\[SLIDE_\\d+\\]", "")
+                   .replaceAll("\\[PAGE_\\d+\\]", "")
+                   .replaceAll("\n{3,}", "\n\n")
+                   .trim();
     }
 
     private String buildPrompt(List<Slide> slides) {
@@ -133,7 +146,9 @@ public class DeepSeekService {
                 end = fullScript.length();
             }
 
-            result.add(fullScript.substring(start, end).trim());
+            String segment = fullScript.substring(start, end).trim();
+            segment = stripMarkers(segment);
+            result.add(segment);
         }
 
         return result;
