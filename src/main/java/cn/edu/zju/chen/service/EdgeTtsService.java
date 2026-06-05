@@ -36,13 +36,32 @@ public class EdgeTtsService {
         if (configured != null && !configured.isBlank()) {
             return configured;
         }
-        // 尝试常见安装路径
-        List<String> candidates = List.of(
-                System.getProperty("user.home") + "/Library/Python/3.13/bin/edge-tts",
-                System.getProperty("user.home") + "/.local/bin/edge-tts",
-                "/opt/homebrew/bin/edge-tts",
-                "/usr/local/bin/edge-tts"
-        );
+
+        String home = System.getProperty("user.home");
+        List<String> candidates = new java.util.ArrayList<>();
+
+        // macOS — pip3 --user
+        candidates.add(home + "/Library/Python/3.13/bin/edge-tts");
+        candidates.add(home + "/Library/Python/3.12/bin/edge-tts");
+        candidates.add(home + "/Library/Python/3.11/bin/edge-tts");
+        // macOS — Homebrew / pipx
+        candidates.add("/opt/homebrew/bin/edge-tts");
+        candidates.add("/usr/local/bin/edge-tts");
+        candidates.add(home + "/.local/bin/edge-tts");
+
+        // Windows — pip3 --user
+        String appData = System.getenv("APPDATA");
+        if (appData != null) {
+            candidates.add(appData + "\\Python\\Python313\\Scripts\\edge-tts.exe");
+            candidates.add(appData + "\\Python\\Python312\\Scripts\\edge-tts.exe");
+            candidates.add(appData + "\\Python\\Python311\\Scripts\\edge-tts.exe");
+        }
+        // Windows — pipx
+        candidates.add(home + "\\.local\\bin\\edge-tts.exe");
+
+        // Linux — pip3 / pipx
+        candidates.add(home + "/.local/bin/edge-tts");
+
         for (String candidate : candidates) {
             if (Files.exists(Path.of(candidate))) {
                 return candidate;
