@@ -83,6 +83,25 @@ export const PresentPage: React.FC<Props> = ({ taskId }) => {
     const currentSlide = slides[currentIndex] || { index: 0, title: '', content: '', notes: '' };
     const currentNarration = narration?.slideScripts?.[currentIndex] || '';
 
+    // 构建幻灯片富文本内容：文字 + 图片识别描述
+    const enrichedContent = (() => {
+        let text = currentSlide.content || '';
+        const images = currentSlide.images;
+        if (images && images.length > 0) {
+            const validDescriptions = images.filter(
+                (img) => img.description && !img.description.startsWith('[')
+            );
+            if (validDescriptions.length > 0) {
+                if (text) text += '\n';
+                text += '\n🖼️ 图片识别内容：\n';
+                validDescriptions.forEach((img, i) => {
+                    text += `\n📷 ${i + 1}. ${img.description}`;
+                });
+            }
+        }
+        return text;
+    })();
+
     // 模式选择界面：幻灯片已加载但讲解稿未生成
     if (!narration && !generating) {
         return (
@@ -244,10 +263,11 @@ export const PresentPage: React.FC<Props> = ({ taskId }) => {
                             {currentSlide.title}
                         </h1>
                         <div style={{
-                            flex: 1, color: '#cbd5e1', fontSize: '16px', lineHeight: '1.8',
+                            flex: 1, color: '#cbd5e1', fontSize: '15px', lineHeight: '1.8',
                             whiteSpace: 'pre-wrap', fontWeight: '400', letterSpacing: '0.5px',
+                            overflowY: 'auto',
                         }}>
-                            {currentSlide.content}
+                            {enrichedContent}
                         </div>
                     </div>
                 </main>
