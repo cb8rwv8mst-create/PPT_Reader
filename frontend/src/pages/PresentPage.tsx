@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { api } from '../api';
 import type { Slide, NarrateResponse } from '../types';
 
@@ -13,7 +13,8 @@ export const PresentPage: React.FC<Props> = ({ taskId }) => {
     const [narration, setNarration] = useState<NarrateResponse | null>(null);
     const [generating, setGenerating] = useState<boolean>(false);
     const [audioReady, setAudioReady] = useState<boolean>(false);
-    const [audioChecking, setAudioChecking] = useState<boolean>(false);
+    const [visionEnabled, setVisionEnabled] = useState<boolean>(true);
+    const audioCheckingRef = useRef(false);
 
     // 获取幻灯片数据
     useEffect(() => {
@@ -30,47 +31,45 @@ export const PresentPage: React.FC<Props> = ({ taskId }) => {
         fetchSlides();
     }, [taskId]);
 
-    // 幻灯片加载完成后自动生成讲解稿
-    useEffect(() => {
-        if (slides.length > 0 && !narration) {
-            const generateNarration = async () => {
-                setGenerating(true);
-                try {
-                    const data = await api.narrate(taskId, slides);
-                    setNarration(data);
-                } catch (err) {
-                    console.error('生成讲解稿失败:', err);
-                } finally {
-                    setGenerating(false);
-                }
-            };
-            generateNarration();
+    const startNarration = async () => {
+        setGenerating(true);
+        try {
+            const data = await api.narrate(taskId, slides, visionEnabled);
+            setNarration(data);
+            // 重新拉取 slides，获取服务端填入的图片识别描述
+            const updatedSlides = await api.getSlides(taskId);
+            setSlides(updatedSlides);
+        } catch (err) {
+            console.error('生成讲解稿失败:', err);
+        } finally {
+            setGenerating(false);
         }
-    }, [slides, taskId, narration]);
+    };
 
     // 讲解稿生成后轮询音频是否就绪
     useEffect(() => {
-        if (!narration || audioReady || audioChecking) return;
+        if (!narration || audioReady) return;
 
         const checkAudio = async () => {
-            setAudioChecking(true);
-            const url = api.getAudioUrl(taskId);
+            if (audioCheckingRef.current) return;
+            audioCheckingRef.current = true;
             try {
+                const url = api.getAudioUrl(taskId);
                 const res = await fetch(url, { method: 'HEAD' });
                 if (res.ok) {
                     setAudioReady(true);
-                    return;
                 }
             } catch {
-                // 请求失败，继续轮询
+                // 继续轮询
+            } finally {
+                audioCheckingRef.current = false;
             }
-            setAudioChecking(false);
         };
 
         checkAudio();
         const interval = setInterval(checkAudio, 5000);
         return () => clearInterval(interval);
-    }, [narration, audioReady, audioChecking, taskId]);
+    }, [narration, audioReady, taskId]);
 
     if (loading) {
         return (
@@ -87,6 +86,133 @@ export const PresentPage: React.FC<Props> = ({ taskId }) => {
     const currentSlide = slides[currentIndex] || { index: 0, title: '', content: '', notes: '' };
     const currentNarration = narration?.slideScripts?.[currentIndex] || '';
 
+    // 简易 Markdown → HTML（支持粗体、斜体、行内代码、代码块、LaTeX 公式、列表）
+    const renderMarkdown = (md: string): string => {
+        let html = md
+            // 代码块
+            .replace(/```(\w*)\n([\s\S]*?)```/g, '<pre><code>$2</code></pre>')
+            // LaTeX 块公式 $$...$$
+            .replace(/\$\$([\s\S]*?)\$\$/g, '<div class="math-block">$1</div>')
+            // LaTeX 行内公式 $...$
+            .replace(/\$(.+?)\$/g, '<span class="math-inline">$1</span>')
+            // 行内代码
+            .replace(/`([^`]+)`/g, '<code>$1</code>')
+            // 粗体
+            .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+            // 斜体
+            .replace(/\*(.+?)\*/g, '<em>$1</em>')
+            // 无序列表
+            .replace(/^[-*]\s+(.+)$/gm, '<li>$1</li>')
+            // 有序列表
+            .replace(/^\d+\.\s+(.+)$/gm, '<li>$1</li>')
+            // 标题
+            .replace(/^###\s+(.+)$/gm, '<strong>$1</strong>')
+            // 段落间空行
+            .replace(/\n\n/g, '<br/><br/>')
+            // 单换行
+            .replace(/\n/g, '<br/>');
+
+        // 包裹连续的 <li>
+        html = html.replace(/(<li>.*?<\/li>(?:<br\/>)?)+/g, '<ul>$&</ul>');
+        // 清理 <ul> 内的 <br/>
+        html = html.replace(/<ul>/, (m) => m).replace(/<\/ul>/, (m) => m);
+        html = html.replace(/<li>.*?<\/li>/gs, (m) => m.replace(/<br\/>/g, ''));
+
+        return html;
+    };
+
+    // 构建幻灯片富文本内容：文字 + 图片识别描述
+    const enrichedHtml = (() => {
+        let html = renderMarkdown(currentSlide.content || '');
+        const images = currentSlide.images;
+        if (images && images.length > 0) {
+            const validDescriptions = images.filter(
+                (img) => img.description && !img.description.startsWith('[')
+            );
+            if (validDescriptions.length > 0) {
+                html += '<br/><br/>🖼️ <strong>图片识别内容：</strong><br/>';
+                validDescriptions.forEach((img, i) => {
+                    html += `<br/>📷 <strong>${i + 1}.</strong> ${renderMarkdown(img.description)}`;
+                });
+            }
+        }
+        return html;
+    })();
+
+    // 模式选择界面：幻灯片已加载但讲解稿未生成
+    if (!narration && !generating) {
+        return (
+            <div style={{
+                width: '100vw', height: '100vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+                backgroundImage: `
+                    linear-gradient(135deg, rgba(12, 9, 26, 0.45) 0%, rgba(12, 9, 26, 0.8) 100%),
+                    url('https://images.unsplash.com/photo-1634017839464-5c339ebe3cb4?auto=format&fit=crop&w=1920&q=80')
+                `,
+                backgroundSize: 'cover', backgroundPosition: 'center',
+                fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+                gap: '24px',
+            }}>
+                <div style={{
+                    background: 'rgba(255, 255, 255, 0.03)', padding: '48px 56px', borderRadius: '28px',
+                    backdropFilter: 'blur(35px)', border: '1px solid rgba(255, 255, 255, 0.08)',
+                    boxShadow: '0 40px 100px rgba(0, 0, 0, 0.5)', textAlign: 'center', maxWidth: '480px',
+                }}>
+                    <h2 style={{ color: '#fff', fontSize: '24px', fontWeight: '800', marginBottom: '8px' }}>
+                        选择分析模式
+                    </h2>
+                    <p style={{ color: 'rgba(255,255,255,0.5)', fontSize: '13px', marginBottom: '32px' }}>
+                        已加载 {slides.length} 页幻灯片，请选择讲解稿生成方式
+                    </p>
+
+                    {/* 模式选择 */}
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginBottom: '28px' }}>
+                        <label style={{
+                            display: 'flex', alignItems: 'center', gap: '12px',
+                            padding: '16px 20px', borderRadius: '14px', cursor: 'pointer',
+                            background: !visionEnabled ? 'rgba(139, 92, 246, 0.12)' : 'rgba(255,255,255,0.03)',
+                            border: !visionEnabled ? '1px solid rgba(139, 92, 246, 0.3)' : '1px solid rgba(255,255,255,0.06)',
+                            boxShadow: !visionEnabled ? '0 0 20px rgba(139, 92, 246, 0.15)' : 'none',
+                            transition: 'all 0.2s ease',
+                        }}>
+                            <input type="radio" name="vision" checked={!visionEnabled} onChange={() => setVisionEnabled(false)}
+                                style={{ accentColor: '#8b5cf6', width: '16px', height: '16px' }} />
+                            <div style={{ textAlign: 'left' }}>
+                                <div style={{ color: '#f1f5f9', fontSize: '15px', fontWeight: '700' }}>⚡ 仅文本分析</div>
+                                <div style={{ color: 'rgba(255,255,255,0.4)', fontSize: '12px', marginTop: '4px' }}>仅根据文字内容生成讲解稿，速度较快</div>
+                            </div>
+                        </label>
+
+                        <label style={{
+                            display: 'flex', alignItems: 'center', gap: '12px',
+                            padding: '16px 20px', borderRadius: '14px', cursor: 'pointer',
+                            background: visionEnabled ? 'rgba(139, 92, 246, 0.12)' : 'rgba(255,255,255,0.03)',
+                            border: visionEnabled ? '1px solid rgba(139, 92, 246, 0.3)' : '1px solid rgba(255,255,255,0.06)',
+                            boxShadow: visionEnabled ? '0 0 20px rgba(139, 92, 246, 0.15)' : 'none',
+                            transition: 'all 0.2s ease',
+                        }}>
+                            <input type="radio" name="vision" checked={visionEnabled} onChange={() => setVisionEnabled(true)}
+                                style={{ accentColor: '#8b5cf6', width: '16px', height: '16px' }} />
+                            <div style={{ textAlign: 'left' }}>
+                                <div style={{ color: '#f1f5f9', fontSize: '15px', fontWeight: '700' }}>🔮 图像识别分析</div>
+                                <div style={{ color: '#fbbf24', fontSize: '12px', marginTop: '4px' }}>识别图片中的公式和图表后再生成讲解稿，用时较长</div>
+                            </div>
+                        </label>
+                    </div>
+
+                    <button onClick={startNarration} style={{
+                        width: '100%', padding: '14px 0', borderRadius: '14px', border: 'none', cursor: 'pointer',
+                        background: 'linear-gradient(135deg, #8b5cf6 0%, #06b6d4 100%)',
+                        color: '#fff', fontSize: '16px', fontWeight: '700',
+                        boxShadow: '0 0 30px rgba(139, 92, 246, 0.3)',
+                        letterSpacing: '1px',
+                    }}>
+                        🚀 开始生成讲解稿
+                    </button>
+                </div>
+            </div>
+        );
+    }
+
     return (
         <div style={{
             width: '100vw', height: '100vh', display: 'flex', flexDirection: 'column',
@@ -98,6 +224,50 @@ export const PresentPage: React.FC<Props> = ({ taskId }) => {
             backgroundSize: 'cover', backgroundPosition: 'center', backgroundRepeat: 'no-repeat',
             fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
         }}>
+            <style>{`
+                .slide-content code {
+                    background: rgba(139, 92, 246, 0.15);
+                    color: #c084fc;
+                    padding: 1px 6px;
+                    border-radius: 4px;
+                    font-size: 13px;
+                    font-family: 'SF Mono', 'Fira Code', monospace;
+                }
+                .slide-content pre {
+                    background: rgba(0,0,0,0.3);
+                    padding: 12px 16px;
+                    border-radius: 8px;
+                    overflow-x: auto;
+                    margin: 8px 0;
+                }
+                .slide-content pre code {
+                    background: none;
+                    padding: 0;
+                    color: #e2e8f0;
+                }
+                .slide-content ul {
+                    padding-left: 20px;
+                    margin: 4px 0;
+                }
+                .slide-content li {
+                    margin: 2px 0;
+                    color: #cbd5e1;
+                }
+                .slide-content strong {
+                    color: #f1f5f9;
+                }
+                .slide-content .math-inline {
+                    color: #67e8f9;
+                    font-style: italic;
+                }
+                .slide-content .math-block {
+                    display: block;
+                    text-align: center;
+                    color: #67e8f9;
+                    font-style: italic;
+                    padding: 8px 0;
+                }
+            `}</style>
 
             {/* 顶部标题栏 */}
             <header style={{
@@ -173,12 +343,15 @@ export const PresentPage: React.FC<Props> = ({ taskId }) => {
                         }}>
                             {currentSlide.title}
                         </h1>
-                        <div style={{
-                            flex: 1, color: '#cbd5e1', fontSize: '16px', lineHeight: '1.8',
-                            whiteSpace: 'pre-wrap', fontWeight: '400', letterSpacing: '0.5px',
-                        }}>
-                            {currentSlide.content}
-                        </div>
+                        <div
+                            className="slide-content"
+                            style={{
+                                flex: 1, color: '#cbd5e1', fontSize: '15px', lineHeight: '1.8',
+                                fontWeight: '400', letterSpacing: '0.5px',
+                                overflowY: 'auto',
+                            }}
+                            dangerouslySetInnerHTML={{ __html: enrichedHtml }}
+                        />
                     </div>
                 </main>
 

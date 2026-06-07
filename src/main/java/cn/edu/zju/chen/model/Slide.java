@@ -5,6 +5,8 @@ import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.util.List;
+
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
@@ -22,4 +24,7 @@ public class Slide {
 
     @Schema(description = "演讲者备注", example = "此处可补充背景信息")
     private String notes;
+
+    @Schema(description = "幻灯片中的图片列表")
+    private List<SlideImage> images;
 }

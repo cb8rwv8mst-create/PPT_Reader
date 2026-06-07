@@ -48,19 +48,21 @@ export const api = {
     },
 
     // 3. 生成 AI 讲解稿接口
-    async narrate(id: string, slides: Slide[]): Promise<NarrateResponse> {
+    async narrate(id: string, slides: Slide[], vision = true): Promise<NarrateResponse> {
         if (USE_MOCK) {
-            await new Promise((resolve) => setTimeout(resolve, 2000));
+            const delay = vision ? 3000 : 1500;
+            await new Promise((resolve) => setTimeout(resolve, delay));
+            const prefix = vision ? '【图像识别增强】' : '【纯文本分析】';
             return {
-                fullScript: '完整讲解稿：大家好…',
+                fullScript: prefix + '完整讲解稿：大家好…',
                 slideScripts: [
-                    '【第一页】大家好！欢迎来到 AI PPT 讲解员项目。',
-                    '【第二页】现在请看第二页，我们的系统架构非常精简。',
-                    '【第三页】最后展望未来，谢谢大家！',
+                    prefix + '【第一页】大家好！欢迎来到 AI PPT 讲解员项目。',
+                    prefix + '【第二页】现在请看第二页，我们的系统架构非常精简。',
+                    prefix + '【第三页】最后展望未来，谢谢大家！',
                 ],
             };
         }
-        const res = await fetch(`${API_BASE}/${id}/narrate`, {
+        const res = await fetch(`${API_BASE}/${id}/narrate?vision=${vision}`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(slides),
