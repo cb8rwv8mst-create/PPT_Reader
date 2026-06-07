@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { api } from '../api';
 import type { Slide, NarrateResponse } from '../types';
 
@@ -13,8 +13,8 @@ export const PresentPage: React.FC<Props> = ({ taskId }) => {
     const [narration, setNarration] = useState<NarrateResponse | null>(null);
     const [generating, setGenerating] = useState<boolean>(false);
     const [audioReady, setAudioReady] = useState<boolean>(false);
-    const [audioChecking, setAudioChecking] = useState<boolean>(false);
     const [visionEnabled, setVisionEnabled] = useState<boolean>(true);
+    const audioCheckingRef = useRef(false);
 
     // 获取幻灯片数据
     useEffect(() => {
@@ -45,27 +45,28 @@ export const PresentPage: React.FC<Props> = ({ taskId }) => {
 
     // 讲解稿生成后轮询音频是否就绪
     useEffect(() => {
-        if (!narration || audioReady || audioChecking) return;
+        if (!narration || audioReady) return;
 
         const checkAudio = async () => {
-            setAudioChecking(true);
-            const url = api.getAudioUrl(taskId);
+            if (audioCheckingRef.current) return;
+            audioCheckingRef.current = true;
             try {
+                const url = api.getAudioUrl(taskId);
                 const res = await fetch(url, { method: 'HEAD' });
                 if (res.ok) {
                     setAudioReady(true);
-                    return;
                 }
             } catch {
-                // 请求失败，继续轮询
+                // 继续轮询
+            } finally {
+                audioCheckingRef.current = false;
             }
-            setAudioChecking(false);
         };
 
         checkAudio();
         const interval = setInterval(checkAudio, 5000);
         return () => clearInterval(interval);
-    }, [narration, audioReady, audioChecking, taskId]);
+    }, [narration, audioReady, taskId]);
 
     if (loading) {
         return (
