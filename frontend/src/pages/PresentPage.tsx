@@ -36,6 +36,9 @@ export const PresentPage: React.FC<Props> = ({ taskId }) => {
         try {
             const data = await api.narrate(taskId, slides, visionEnabled);
             setNarration(data);
+            // 重新拉取 slides，获取服务端填入的图片识别描述
+            const updatedSlides = await api.getSlides(taskId);
+            setSlides(updatedSlides);
         } catch (err) {
             console.error('生成讲解稿失败:', err);
         } finally {
