@@ -5,6 +5,7 @@ import cn.edu.zju.chen.model.Narration;
 import cn.edu.zju.chen.model.Slide;
 import cn.edu.zju.chen.service.DeepSeekService;
 import cn.edu.zju.chen.service.EdgeTtsService;
+import cn.edu.zju.chen.service.ImageRecognitionService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -28,6 +29,7 @@ public class NarrationController {
 
     private final DeepSeekService deepSeekService;
     private final EdgeTtsService edgeTtsService;
+    private final ImageRecognitionService imageRecognitionService;
 
     @Operation(summary = "生成 AI 讲解稿", description = "传入幻灯片列表，调用 DeepSeek 生成讲解稿并异步合成语音")
     @PostMapping("/{id}/narrate")
@@ -35,6 +37,14 @@ public class NarrationController {
             @Parameter(description = "任务 ID") @PathVariable String id,
             @RequestBody List<Slide> slides) {
         log.info("生成讲解稿, taskId={}, 共{}页", id, slides.size());
+
+        // 先识别所有幻灯片中的图片
+        for (Slide slide : slides) {
+            if (slide.getImages() != null && !slide.getImages().isEmpty()) {
+                imageRecognitionService.recognize(slide.getImages());
+            }
+        }
+
         Narration narration = deepSeekService.generateNarration(slides);
 
         // 异步合成语音

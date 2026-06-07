@@ -4,7 +4,8 @@
 
 ## 功能特性
 
-- **PPT 解析**：上传 .pptx 文件，自动提取每页标题、正文和备注
+- **PPT 解析**：上传 .pptx 文件，自动提取每页标题、正文、备注和嵌入图片
+- **图片识别**：调用 Qwen Vision API 识别 PPT 中的公式、图表、示意图，生成文字描述
 - **AI 讲解稿生成**：调用 DeepSeek 大模型，基于幻灯片内容生成自然流畅的中文讲解
 - **语音合成**：通过 Microsoft Edge TTS 将讲解稿转为 MP3 音频，支持在线播放
 - **逐页联动**：幻灯片、讲解文字、语音播报三者同步联动
@@ -16,8 +17,9 @@
 | 前端 | React 18 + Vite + TypeScript |
 | 后端 | Spring Boot 3.3 + Java 17 |
 | PPT 解析 | Apache POI (XSLF) |
-| AI 文本生成 | DeepSeek API (`deepseek-chat`) |
+| AI 文本生成 | DeepSeek API (`deepseek-v4-flash`) |
 | 语音合成 | Microsoft Edge TTS |
+| 图片识别 | Qwen Vision API (`qwen3.6-flash`) |
 | API 文档 | Knife4j (OpenAPI 3) |
 | 构建工具 | Maven (后端) + npm (前端) |
 
@@ -33,6 +35,7 @@
 │            Backend (Spring Boot)             │
 │                                              │
 │  Controller → Service → POIParser  (.pptx)   │
+│                      → ImageRecognition (图片)│
 │                      → DeepSeekClient (讲解)  │
 │                      → EdgeTTSClient  (语音)  │
 └──────────────────────────────────────────────┘
@@ -94,7 +97,14 @@ npm run dev
   "index": 0,
   "title": "幻灯片标题",
   "content": "正文内容",
-  "notes": "备注内容"
+  "notes": "备注内容",
+  "images": [
+    {
+      "imageId": "slide0_img0",
+      "mimeType": "image/png",
+      "description": "图中展示了一个神经网络的架构图..."
+    }
+  ]
 }
 ```
 
@@ -117,9 +127,11 @@ PPT Reader/
 │   ├── service/
 │   │   ├── PptParserService.java
 │   │   ├── DeepSeekService.java
-│   │   └── EdgeTTSService.java
+│   │   ├── EdgeTTSService.java
+│   │   └── ImageRecognitionService.java
 │   └── model/
 │       ├── Slide.java
+│       ├── SlideImage.java
 │       └── Narration.java
 ├── src/main/resources/
 │   └── application.properties

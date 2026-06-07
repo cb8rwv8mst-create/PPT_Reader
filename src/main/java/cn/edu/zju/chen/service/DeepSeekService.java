@@ -105,6 +105,17 @@ public class DeepSeekService {
             sb.append("标题：").append(nullToEmpty(slide.getTitle())).append("\n");
             sb.append("正文：").append(nullToEmpty(slide.getContent())).append("\n");
             sb.append("备注：").append(nullToEmpty(slide.getNotes())).append("\n");
+
+            // 图片描述
+            if (slide.getImages() != null) {
+                for (int j = 0; j < slide.getImages().size(); j++) {
+                    var img = slide.getImages().get(j);
+                    if (img.getDescription() != null && !img.getDescription().isBlank()) {
+                        sb.append("图片 ").append(j + 1).append(" 的内容：")
+                          .append(img.getDescription()).append("\n");
+                    }
+                }
+            }
         }
 
         return sb.toString();
