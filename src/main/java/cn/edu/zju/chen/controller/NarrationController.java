@@ -34,21 +34,24 @@ public class NarrationController {
     private final ImageRecognitionService imageRecognitionService;
     private final PptTaskStore taskStore;
 
-    @Operation(summary = "生成 AI 讲解稿", description = "传入幻灯片列表，调用 DeepSeek 生成讲解稿并异步合成语音")
+    @Operation(summary = "生成 AI 讲解稿", description = "传入幻灯片列表，调用 DeepSeek 生成讲解稿并异步合成语音。vision=false 跳过图片识别")
     @PostMapping("/{id}/narrate")
     public ApiResponse<Narration> narrate(
             @Parameter(description = "任务 ID") @PathVariable String id,
+            @Parameter(description = "是否启用图片识别（默认 true）") @RequestParam(defaultValue = "true") boolean vision,
             @RequestBody List<Slide> slides) {
-        log.info("生成讲解稿, taskId={}, 共{}页", id, slides.size());
+        log.info("生成讲解稿, taskId={}, vision={}, 共{}页", id, vision, slides.size());
 
         // 从 TaskStore 获取包含 base64 图片数据的完整 slides
         PptTask task = taskStore.findById(id);
         List<Slide> fullSlides = task.getSlides();
 
         // 先识别所有幻灯片中的图片
-        for (Slide slide : fullSlides) {
-            if (slide.getImages() != null && !slide.getImages().isEmpty()) {
-                imageRecognitionService.recognize(slide.getImages());
+        if (vision) {
+            for (Slide slide : fullSlides) {
+                if (slide.getImages() != null && !slide.getImages().isEmpty()) {
+                    imageRecognitionService.recognize(slide.getImages());
+                }
             }
         }
 

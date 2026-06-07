@@ -14,6 +14,7 @@ export const PresentPage: React.FC<Props> = ({ taskId }) => {
     const [generating, setGenerating] = useState<boolean>(false);
     const [audioReady, setAudioReady] = useState<boolean>(false);
     const [audioChecking, setAudioChecking] = useState<boolean>(false);
+    const [visionEnabled, setVisionEnabled] = useState<boolean>(true);
 
     // 获取幻灯片数据
     useEffect(() => {
@@ -30,23 +31,17 @@ export const PresentPage: React.FC<Props> = ({ taskId }) => {
         fetchSlides();
     }, [taskId]);
 
-    // 幻灯片加载完成后自动生成讲解稿
-    useEffect(() => {
-        if (slides.length > 0 && !narration) {
-            const generateNarration = async () => {
-                setGenerating(true);
-                try {
-                    const data = await api.narrate(taskId, slides);
-                    setNarration(data);
-                } catch (err) {
-                    console.error('生成讲解稿失败:', err);
-                } finally {
-                    setGenerating(false);
-                }
-            };
-            generateNarration();
+    const startNarration = async () => {
+        setGenerating(true);
+        try {
+            const data = await api.narrate(taskId, slides, visionEnabled);
+            setNarration(data);
+        } catch (err) {
+            console.error('生成讲解稿失败:', err);
+        } finally {
+            setGenerating(false);
         }
-    }, [slides, taskId, narration]);
+    };
 
     // 讲解稿生成后轮询音频是否就绪
     useEffect(() => {
@@ -86,6 +81,80 @@ export const PresentPage: React.FC<Props> = ({ taskId }) => {
 
     const currentSlide = slides[currentIndex] || { index: 0, title: '', content: '', notes: '' };
     const currentNarration = narration?.slideScripts?.[currentIndex] || '';
+
+    // 模式选择界面：幻灯片已加载但讲解稿未生成
+    if (!narration && !generating) {
+        return (
+            <div style={{
+                width: '100vw', height: '100vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+                backgroundImage: `
+                    linear-gradient(135deg, rgba(12, 9, 26, 0.45) 0%, rgba(12, 9, 26, 0.8) 100%),
+                    url('https://images.unsplash.com/photo-1634017839464-5c339ebe3cb4?auto=format&fit=crop&w=1920&q=80')
+                `,
+                backgroundSize: 'cover', backgroundPosition: 'center',
+                fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+                gap: '24px',
+            }}>
+                <div style={{
+                    background: 'rgba(255, 255, 255, 0.03)', padding: '48px 56px', borderRadius: '28px',
+                    backdropFilter: 'blur(35px)', border: '1px solid rgba(255, 255, 255, 0.08)',
+                    boxShadow: '0 40px 100px rgba(0, 0, 0, 0.5)', textAlign: 'center', maxWidth: '480px',
+                }}>
+                    <h2 style={{ color: '#fff', fontSize: '24px', fontWeight: '800', marginBottom: '8px' }}>
+                        选择分析模式
+                    </h2>
+                    <p style={{ color: 'rgba(255,255,255,0.5)', fontSize: '13px', marginBottom: '32px' }}>
+                        已加载 {slides.length} 页幻灯片，请选择讲解稿生成方式
+                    </p>
+
+                    {/* 模式选择 */}
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginBottom: '28px' }}>
+                        <label style={{
+                            display: 'flex', alignItems: 'center', gap: '12px',
+                            padding: '16px 20px', borderRadius: '14px', cursor: 'pointer',
+                            background: !visionEnabled ? 'rgba(139, 92, 246, 0.12)' : 'rgba(255,255,255,0.03)',
+                            border: !visionEnabled ? '1px solid rgba(139, 92, 246, 0.3)' : '1px solid rgba(255,255,255,0.06)',
+                            boxShadow: !visionEnabled ? '0 0 20px rgba(139, 92, 246, 0.15)' : 'none',
+                            transition: 'all 0.2s ease',
+                        }}>
+                            <input type="radio" name="vision" checked={!visionEnabled} onChange={() => setVisionEnabled(false)}
+                                style={{ accentColor: '#8b5cf6', width: '16px', height: '16px' }} />
+                            <div style={{ textAlign: 'left' }}>
+                                <div style={{ color: '#f1f5f9', fontSize: '15px', fontWeight: '700' }}>⚡ 仅文本分析</div>
+                                <div style={{ color: 'rgba(255,255,255,0.4)', fontSize: '12px', marginTop: '4px' }}>仅根据文字内容生成讲解稿，速度较快</div>
+                            </div>
+                        </label>
+
+                        <label style={{
+                            display: 'flex', alignItems: 'center', gap: '12px',
+                            padding: '16px 20px', borderRadius: '14px', cursor: 'pointer',
+                            background: visionEnabled ? 'rgba(139, 92, 246, 0.12)' : 'rgba(255,255,255,0.03)',
+                            border: visionEnabled ? '1px solid rgba(139, 92, 246, 0.3)' : '1px solid rgba(255,255,255,0.06)',
+                            boxShadow: visionEnabled ? '0 0 20px rgba(139, 92, 246, 0.15)' : 'none',
+                            transition: 'all 0.2s ease',
+                        }}>
+                            <input type="radio" name="vision" checked={visionEnabled} onChange={() => setVisionEnabled(true)}
+                                style={{ accentColor: '#8b5cf6', width: '16px', height: '16px' }} />
+                            <div style={{ textAlign: 'left' }}>
+                                <div style={{ color: '#f1f5f9', fontSize: '15px', fontWeight: '700' }}>🔮 图像识别分析</div>
+                                <div style={{ color: '#fbbf24', fontSize: '12px', marginTop: '4px' }}>识别图片中的公式和图表后再生成讲解稿，用时较长</div>
+                            </div>
+                        </label>
+                    </div>
+
+                    <button onClick={startNarration} style={{
+                        width: '100%', padding: '14px 0', borderRadius: '14px', border: 'none', cursor: 'pointer',
+                        background: 'linear-gradient(135deg, #8b5cf6 0%, #06b6d4 100%)',
+                        color: '#fff', fontSize: '16px', fontWeight: '700',
+                        boxShadow: '0 0 30px rgba(139, 92, 246, 0.3)',
+                        letterSpacing: '1px',
+                    }}>
+                        🚀 开始生成讲解稿
+                    </button>
+                </div>
+            </div>
+        );
+    }
 
     return (
         <div style={{
