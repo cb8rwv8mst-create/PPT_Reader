@@ -86,23 +86,57 @@ export const PresentPage: React.FC<Props> = ({ taskId }) => {
     const currentSlide = slides[currentIndex] || { index: 0, title: '', content: '', notes: '' };
     const currentNarration = narration?.slideScripts?.[currentIndex] || '';
 
+    // 简易 Markdown → HTML（支持粗体、斜体、行内代码、代码块、LaTeX 公式、列表）
+    const renderMarkdown = (md: string): string => {
+        let html = md
+            // 代码块
+            .replace(/```(\w*)\n([\s\S]*?)```/g, '<pre><code>$2</code></pre>')
+            // LaTeX 块公式 $$...$$
+            .replace(/\$\$([\s\S]*?)\$\$/g, '<div class="math-block">$1</div>')
+            // LaTeX 行内公式 $...$
+            .replace(/\$(.+?)\$/g, '<span class="math-inline">$1</span>')
+            // 行内代码
+            .replace(/`([^`]+)`/g, '<code>$1</code>')
+            // 粗体
+            .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+            // 斜体
+            .replace(/\*(.+?)\*/g, '<em>$1</em>')
+            // 无序列表
+            .replace(/^[-*]\s+(.+)$/gm, '<li>$1</li>')
+            // 有序列表
+            .replace(/^\d+\.\s+(.+)$/gm, '<li>$1</li>')
+            // 标题
+            .replace(/^###\s+(.+)$/gm, '<strong>$1</strong>')
+            // 段落间空行
+            .replace(/\n\n/g, '<br/><br/>')
+            // 单换行
+            .replace(/\n/g, '<br/>');
+
+        // 包裹连续的 <li>
+        html = html.replace(/(<li>.*?<\/li>(?:<br\/>)?)+/g, '<ul>$&</ul>');
+        // 清理 <ul> 内的 <br/>
+        html = html.replace(/<ul>/, (m) => m).replace(/<\/ul>/, (m) => m);
+        html = html.replace(/<li>.*?<\/li>/gs, (m) => m.replace(/<br\/>/g, ''));
+
+        return html;
+    };
+
     // 构建幻灯片富文本内容：文字 + 图片识别描述
-    const enrichedContent = (() => {
-        let text = currentSlide.content || '';
+    const enrichedHtml = (() => {
+        let html = renderMarkdown(currentSlide.content || '');
         const images = currentSlide.images;
         if (images && images.length > 0) {
             const validDescriptions = images.filter(
                 (img) => img.description && !img.description.startsWith('[')
             );
             if (validDescriptions.length > 0) {
-                if (text) text += '\n';
-                text += '\n🖼️ 图片识别内容：\n';
+                html += '<br/><br/>🖼️ <strong>图片识别内容：</strong><br/>';
                 validDescriptions.forEach((img, i) => {
-                    text += `\n📷 ${i + 1}. ${img.description}`;
+                    html += `<br/>📷 <strong>${i + 1}.</strong> ${renderMarkdown(img.description)}`;
                 });
             }
         }
-        return text;
+        return html;
     })();
 
     // 模式选择界面：幻灯片已加载但讲解稿未生成
@@ -190,6 +224,50 @@ export const PresentPage: React.FC<Props> = ({ taskId }) => {
             backgroundSize: 'cover', backgroundPosition: 'center', backgroundRepeat: 'no-repeat',
             fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
         }}>
+            <style>{`
+                .slide-content code {
+                    background: rgba(139, 92, 246, 0.15);
+                    color: #c084fc;
+                    padding: 1px 6px;
+                    border-radius: 4px;
+                    font-size: 13px;
+                    font-family: 'SF Mono', 'Fira Code', monospace;
+                }
+                .slide-content pre {
+                    background: rgba(0,0,0,0.3);
+                    padding: 12px 16px;
+                    border-radius: 8px;
+                    overflow-x: auto;
+                    margin: 8px 0;
+                }
+                .slide-content pre code {
+                    background: none;
+                    padding: 0;
+                    color: #e2e8f0;
+                }
+                .slide-content ul {
+                    padding-left: 20px;
+                    margin: 4px 0;
+                }
+                .slide-content li {
+                    margin: 2px 0;
+                    color: #cbd5e1;
+                }
+                .slide-content strong {
+                    color: #f1f5f9;
+                }
+                .slide-content .math-inline {
+                    color: #67e8f9;
+                    font-style: italic;
+                }
+                .slide-content .math-block {
+                    display: block;
+                    text-align: center;
+                    color: #67e8f9;
+                    font-style: italic;
+                    padding: 8px 0;
+                }
+            `}</style>
 
             {/* 顶部标题栏 */}
             <header style={{
@@ -265,13 +343,15 @@ export const PresentPage: React.FC<Props> = ({ taskId }) => {
                         }}>
                             {currentSlide.title}
                         </h1>
-                        <div style={{
-                            flex: 1, color: '#cbd5e1', fontSize: '15px', lineHeight: '1.8',
-                            whiteSpace: 'pre-wrap', fontWeight: '400', letterSpacing: '0.5px',
-                            overflowY: 'auto',
-                        }}>
-                            {enrichedContent}
-                        </div>
+                        <div
+                            className="slide-content"
+                            style={{
+                                flex: 1, color: '#cbd5e1', fontSize: '15px', lineHeight: '1.8',
+                                fontWeight: '400', letterSpacing: '0.5px',
+                                overflowY: 'auto',
+                            }}
+                            dangerouslySetInnerHTML={{ __html: enrichedHtml }}
+                        />
                     </div>
                 </main>
 
