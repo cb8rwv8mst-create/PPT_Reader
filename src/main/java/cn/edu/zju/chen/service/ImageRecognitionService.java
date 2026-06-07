@@ -8,6 +8,10 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestClient;
 
+import javax.imageio.ImageIO;
+import java.awt.image.BufferedImage;
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
 import java.util.Base64;
 import java.util.List;
 import java.util.Map;
@@ -44,7 +48,13 @@ public class ImageRecognitionService {
 
         for (SlideImage image : images) {
             try {
-                String description = callVisionAPI(image.getMimeType(), image.getBase64Data());
+                String normalized = normalizeImage(image);
+                if (normalized == null) {
+                    image.setDescription("[图片格式不支持（EMF/WMF 等矢量格式）]");
+                    log.warn("图片 {} 格式不支持，已跳过", image.getImageId());
+                    continue;
+                }
+                String description = callVisionAPI(normalized);
                 image.setDescription(description);
                 log.info("图片识别完成: {}", image.getImageId());
             } catch (Exception e) {
@@ -54,8 +64,28 @@ public class ImageRecognitionService {
         }
     }
 
-    private String callVisionAPI(String mimeType, String base64Data) {
-        String dataUrl = "data:" + mimeType + ";base64," + base64Data;
+    /**
+     * 将图片标准化为 PNG base64 data URL。
+     * 如果图片是 EMF/WMF 等 ImageIO 无法解码的格式，返回 null 跳过。
+     */
+    private String normalizeImage(SlideImage image) {
+        byte[] rawBytes = Base64.getDecoder().decode(image.getBase64Data());
+        try {
+            BufferedImage bufferedImage = ImageIO.read(new ByteArrayInputStream(rawBytes));
+            if (bufferedImage == null) {
+                return null; // 无法解码
+            }
+            ByteArrayOutputStream out = new ByteArrayOutputStream();
+            ImageIO.write(bufferedImage, "png", out);
+            String pngBase64 = Base64.getEncoder().encodeToString(out.toByteArray());
+            return "data:image/png;base64," + pngBase64;
+        } catch (Exception e) {
+            log.warn("图片 {} 标准化失败: {}", image.getImageId(), e.getMessage());
+            return null;
+        }
+    }
+
+    private String callVisionAPI(String dataUrl) {
 
         Map<String, Object> requestBody = Map.of(
                 "model", model,
