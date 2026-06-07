@@ -12,6 +12,8 @@ export const PresentPage: React.FC<Props> = ({ taskId }) => {
     const [loading, setLoading] = useState<boolean>(true);
     const [narration, setNarration] = useState<NarrateResponse | null>(null);
     const [generating, setGenerating] = useState<boolean>(false);
+    const [audioReady, setAudioReady] = useState<boolean>(false);
+    const [audioChecking, setAudioChecking] = useState<boolean>(false);
 
     // 获取幻灯片数据
     useEffect(() => {
@@ -45,6 +47,30 @@ export const PresentPage: React.FC<Props> = ({ taskId }) => {
             generateNarration();
         }
     }, [slides, taskId, narration]);
+
+    // 讲解稿生成后轮询音频是否就绪
+    useEffect(() => {
+        if (!narration || audioReady || audioChecking) return;
+
+        const checkAudio = async () => {
+            setAudioChecking(true);
+            const url = api.getAudioUrl(taskId);
+            try {
+                const res = await fetch(url, { method: 'HEAD' });
+                if (res.ok) {
+                    setAudioReady(true);
+                    return;
+                }
+            } catch {
+                // 请求失败，继续轮询
+            }
+            setAudioChecking(false);
+        };
+
+        checkAudio();
+        const interval = setInterval(checkAudio, 5000);
+        return () => clearInterval(interval);
+    }, [narration, audioReady, audioChecking, taskId]);
 
     if (loading) {
         return (
@@ -183,16 +209,18 @@ export const PresentPage: React.FC<Props> = ({ taskId }) => {
 
             </div>
 
-            {/* 底部播放器 */}
+            {/* 底部：音频播放卡 + 翻页控制 */}
             <footer style={{
-                height: '90px', borderTop: '1px solid rgba(255, 255, 255, 0.05)',
+                borderTop: '1px solid rgba(255, 255, 255, 0.05)',
                 background: 'rgba(10, 9, 18, 0.35)', backdropFilter: 'blur(25px)',
-                display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 30px',
-                position: 'relative', zIndex: 10,
+                display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 30px',
+                position: 'relative', zIndex: 10, gap: '20px', flexWrap: 'wrap',
             }}>
+
+                {/* 左侧：翻页控制 */}
                 <div style={{
-                    display: 'flex', alignItems: 'center', gap: '20px',
-                    background: 'rgba(255,255,255,0.03)', padding: '12px 35px', borderRadius: '100px',
+                    display: 'flex', alignItems: 'center', gap: '16px',
+                    background: 'rgba(255,255,255,0.03)', padding: '10px 28px', borderRadius: '100px',
                     border: '1px solid rgba(255,255,255,0.06)', boxShadow: '0 10px 30px rgba(0,0,0,0.3)',
                 }}>
                     <button
@@ -222,6 +250,50 @@ export const PresentPage: React.FC<Props> = ({ taskId }) => {
                     >
                         下一页 ⏭
                     </button>
+                </div>
+
+                {/* 右侧：音频播放卡 */}
+                <div style={{
+                    display: 'flex', alignItems: 'center', gap: '12px',
+                    background: audioReady
+                        ? 'rgba(139, 92, 246, 0.12)'
+                        : 'rgba(255,255,255,0.03)',
+                    padding: '10px 24px', borderRadius: '100px',
+                    border: audioReady
+                        ? '1px solid rgba(139, 92, 246, 0.25)'
+                        : '1px solid rgba(255,255,255,0.06)',
+                    boxShadow: audioReady ? '0 0 20px rgba(139, 92, 246, 0.15)' : 'none',
+                    transition: 'all 0.3s ease',
+                    minWidth: '320px',
+                }}>
+                    <span style={{
+                        fontSize: '20px',
+                        filter: audioReady ? 'none' : 'grayscale(100%)',
+                        opacity: audioReady ? 1 : 0.4,
+                    }}>
+                        🎵
+                    </span>
+
+                    {audioReady ? (
+                        <audio
+                            controls
+                            autoPlay
+                            src={api.getAudioUrl(taskId)}
+                            style={{
+                                height: '36px',
+                                background: 'transparent',
+                                filter: 'invert(0.9)',
+                            }}
+                        />
+                    ) : narration ? (
+                        <span style={{ fontSize: '12px', color: '#fbbf24', fontWeight: '600' }}>
+                            语音合成中…
+                        </span>
+                    ) : (
+                        <span style={{ fontSize: '12px', color: '#64748b', fontWeight: '500' }}>
+                            等待讲解稿生成
+                        </span>
+                    )}
                 </div>
             </footer>
 
